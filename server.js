@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const path = require('path');
 
 const app = express();
 const PORT = 3000;
@@ -18,19 +17,32 @@ app.get('/search', async (req, res) => {
     }
 
     try {
-        const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
-            params: {
-                part: 'snippet',
-                q: q,
-                key: process.env.YOUTUBE_API_KEY,
-                type: 'video',
-                videoCategoryId: '10', // Music category
-                maxResults: 20 // Fetch 20 songs
-            }
-        });
+        const baseUrl = 'https://www.googleapis.com/youtube/v3/search';
+        const params = {
+            part: 'snippet',
+            q: q,
+            key: process.env.YOUTUBE_API_KEY,
+            type: 'video',
+            videoCategoryId: '10', // Music
+            maxResults: 50 // Max allowed per call
+        };
 
-        // Map the results to a cleaner format
-        const songs = response.data.items.map(item => ({
+        // 1. Fetch the first 50 results
+        const firstResponse = await axios.get(baseUrl, { params });
+        let allItems = firstResponse.data.items || [];
+        const nextPageToken = firstResponse.data.nextPageToken;
+
+        // 2. If there is a next page, fetch the next 50
+        if (nextPageToken) {
+            const secondResponse = await axios.get(baseUrl, {
+                params: { ...params, pageToken: nextPageToken }
+            });
+            // Combine the two lists
+            allItems = allItems.concat(secondResponse.data.items || []);
+        }
+
+        // 3. Format the data for the frontend
+        const songs = allItems.map(item => ({
             videoId: item.id.videoId,
             title: item.snippet.title,
             channel: item.snippet.channelTitle,

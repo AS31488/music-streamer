@@ -7,9 +7,12 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.static('public'));
 
-app.get('/search', async (req, res) => {
+// FIX 1: Serve files from the main directory (where index.html is)
+app.use(express.static(__dirname));
+
+// FIX 2: Change route to match frontend ('/api/search')
+app.get('/api/search', async (req, res) => {
     const { q } = req.query;
     
     if (!q) {
@@ -17,32 +20,18 @@ app.get('/search', async (req, res) => {
     }
 
     try {
-        const baseUrl = 'https://www.googleapis.com/youtube/v3/search';
-        const params = {
-            part: 'snippet',
-            q: q,
-            key: process.env.YOUTUBE_API_KEY,
-            type: 'video',
-            videoCategoryId: '10', // Music
-            maxResults: 50 // Max allowed per call
-        };
+        const response = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+            params: {
+                part: 'snippet',
+                q: q,
+                key: process.env.YOUTUBE_API_KEY,
+                type: 'video',
+                videoCategoryId: '10',
+                maxResults: 20
+            }
+        });
 
-        // 1. Fetch the first 50 results
-        const firstResponse = await axios.get(baseUrl, { params });
-        let allItems = firstResponse.data.items || [];
-        const nextPageToken = firstResponse.data.nextPageToken;
-
-        // 2. If there is a next page, fetch the next 50
-        if (nextPageToken) {
-            const secondResponse = await axios.get(baseUrl, {
-                params: { ...params, pageToken: nextPageToken }
-            });
-            // Combine the two lists
-            allItems = allItems.concat(secondResponse.data.items || []);
-        }
-
-        // 3. Format the data for the frontend
-        const songs = allItems.map(item => ({
+        const songs = response.data.items.map(item => ({
             videoId: item.id.videoId,
             title: item.snippet.title,
             channel: item.snippet.channelTitle,
@@ -52,7 +41,7 @@ app.get('/search', async (req, res) => {
         res.json(songs);
 
     } catch (error) {
-        console.error("YouTube API Error:", error.response ? error.response.data : error.message);
+        console.error(error);
         res.status(500).json({ error: 'Failed to fetch music' });
     }
 });

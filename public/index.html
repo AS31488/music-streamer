@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Tunes - Full Stack</title>
+    <style>
+        /* Dark Mode Styling */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        
+        h1 { margin-bottom: 20px; color: #1db954; }
+
+        /* Search Container */
+        .controls { background: #1e1e1e; padding: 20px; border-radius: 12px; width: 100%; max-width: 700px; display: flex; gap: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); flex-wrap: wrap; }
+        
+        input { flex: 2; padding: 12px; border-radius: 6px; border: 1px solid #333; background: #2a2a2a; color: white; font-size: 16px; outline: none; }
+        
+        select { padding: 12px; border-radius: 6px; border: 1px solid #333; background: #2a2a2a; color: white; cursor: pointer; }
+
+        button { padding: 12px 24px; border-radius: 6px; border: none; background: #1db954; color: black; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #1ed760; transform: scale(1.05); }
+
+        /* Player Section */
+        #player-container { margin-top: 20px; width: 100%; max-width: 700px; display: none; }
+        .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+        .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* Song List Section */
+        #results-list { width: 100%; max-width: 700px; margin-top: 20px; list-style: none; padding: 0; }
+        
+        .song-item { display: flex; align-items: center; background: #181818; padding: 10px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; transition: 0.2s; border: 1px solid #333; }
+        .song-item:hover { background: #282828; border-color: #1db954; }
+        
+        .song-thumb { width: 60px; height: 45px; object-fit: cover; border-radius: 4px; margin-right: 15px; }
+        .song-info { display: flex; flex-direction: column; }
+        .song-title { font-weight: bold; font-size: 14px; margin-bottom: 4px; }
+        .song-artist { font-size: 12px; color: #b3b3b3; }
+
+    </style>
+</head>
+<body>
+
+    <h1>Web Tunes</h1>
+    
+    <div class="controls">
+        <input type="text" id="searchInput" placeholder="Enter artist or song name..." onkeypress="handleEnter(event)">
+        
+        <select id="searchMode">
+            <option value="song">Target Song (Auto-Play)</option>
+            <option value="artist">Artist Search (List 20)</option>
+        </select>
+        
+        <button onclick="performSearch()">Search</button>
+    </div>
+
+    <div id="player-container">
+        <h2 id="nowPlaying">Now Playing</h2>
+        <div class="video-wrapper">
+            <div id="player"></div>
+        </div>
+    </div>
+
+    <ul id="results-list"></ul>
+
+    <script>
+        let player;
+
+        // Load YouTube API
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                height: '390',
+                width: '640',
+                videoId: '',
+                playerVars: { 'playsinline': 1, 'autoplay': 1 }
+            });
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value;
+            const mode = document.getElementById('searchMode').value;
+            const listContainer = document.getElementById('results-list');
+            const playerContainer = document.getElementById('player-container');
+            const nowPlayingText = document.getElementById('nowPlaying');
+
+            if (!query) return;
+
+            // Clear previous results
+            listContainer.innerHTML = 'Loading...';
+
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                const songs = await response.json();
+
+                listContainer.innerHTML = ''; // Clear loading text
+
+                if (songs.length === 0) {
+                    listContainer.innerHTML = '<p style="text-align:center">No songs found.</p>';
+                    return;
+                }
+
+                if (mode === 'song') {
+                    // MODE 1: Exact Song -> Play the first result immediately
+                    playSong(songs[0].videoId, songs[0].title);
+                    
+                    // Optional: Still show the other matches below just in case
+                    renderList(songs); 
+                } else {
+                    // MODE 2: Artist -> Don't auto-play, just show the list
+                    playerContainer.style.display = 'none'; // Hide player initially
+                    renderList(songs);
+                }
+
+            } catch (error) {
+                console.error(error);
+                listContainer.innerHTML = '<p style="text-align:center; color: red;">Error fetching songs.</p>';
+            }
+        }
+
+        function renderList(songs) {
+            const listContainer = document.getElementById('results-list');
+            
+            songs.forEach(song => {
+                const li = document.createElement('li');
+                li.className = 'song-item';
+                li.onclick = () => playSong(song.videoId, song.title);
+
+                li.innerHTML = `
+                    <img src="${song.thumbnail}" class="song-thumb" alt="thumb">
+                    <div class="song-info">
+                        <span class="song-title">${song.title}</span>
+                        <span class="song-artist">${song.channel}</span>
+                    </div>
+                `;
+                listContainer.appendChild(li);
+            });
+        }
+
+        function playSong(videoId, title) {
+            const playerContainer = document.getElementById('player-container');
+            const nowPlayingText = document.getElementById('nowPlaying');
+
+            // Show player and load video
+            playerContainer.style.display = 'block';
+            nowPlayingText.innerText = "Playing: " + title;
+            player.loadVideoById(videoId);
+            
+            // Scroll to top to see player
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') performSearch();
+        }
+    </script>
+</body>
+</html>

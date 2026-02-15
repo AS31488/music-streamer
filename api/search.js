@@ -1,8 +1,8 @@
-// api/search.js
 const axios = require('axios');
 
-export default async function handler(req, res) {
-    // Enable CORS manually since we aren't using Express middleware anymore
+// CHANGE HERE: Use module.exports instead of export default
+module.exports = async (req, res) => {
+    // Enable CORS
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -11,7 +11,6 @@ export default async function handler(req, res) {
         'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
     );
 
-    // Handle the OPTION request (browser pre-check)
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
@@ -28,18 +27,16 @@ export default async function handler(req, res) {
         const params = {
             part: 'snippet',
             q: q,
-            key: process.env.YOUTUBE_API_KEY, // Vercel will inject this later
+            key: process.env.YOUTUBE_API_KEY,
             type: 'video',
             videoCategoryId: '10',
             maxResults: 50
         };
 
-        // 1. Fetch first 50
         const firstResponse = await axios.get(baseUrl, { params });
         let allItems = firstResponse.data.items || [];
         const nextPageToken = firstResponse.data.nextPageToken;
 
-        // 2. Fetch next 50 (if available)
         if (nextPageToken) {
             const secondResponse = await axios.get(baseUrl, {
                 params: { ...params, pageToken: nextPageToken }
@@ -60,4 +57,4 @@ export default async function handler(req, res) {
         console.error(error);
         res.status(500).json({ error: 'Failed to fetch music' });
     }
-}
+};
